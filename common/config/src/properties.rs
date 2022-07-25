@@ -1,7 +1,7 @@
 use crate::argv;
 use crate::env_vars;
 use crate::error::ConfigError;
-use crate::raw::{Config, Rules};
+use crate::raw::{Config, JournaldConfig, K8sStartupLeaseConfig, Rules};
 use http::types::params::{Params, Tags};
 use humanize_rs::bytes::Bytes;
 use java_properties::PropertiesIter;
@@ -248,7 +248,11 @@ fn from_property_map(map: HashMap<String, String>) -> Result<Config, ConfigError
     }
 
     if let Some(value) = map.get(&JOURNALD_PATHS) {
-        let paths = result.journald.paths.get_or_insert(Vec::new());
+        let paths = result
+            .journald
+            .get_or_insert_with(JournaldConfig::default)
+            .paths
+            .get_or_insert(Vec::new());
         argv::split_by_comma(value)
             .iter()
             .for_each(|v| paths.push(PathBuf::from(v)));
@@ -259,7 +263,13 @@ fn from_property_map(map: HashMap<String, String>) -> Result<Config, ConfigError
     result.log.log_k8s_events = map.get_string(&LOG_K8S_EVENTS);
     result.log.log_metric_server_stats = map.get_string(&LOG_METRIC_SERVER_STATS);
     result.log.db_path = map.get(&DB_PATH).map(PathBuf::from);
-    result.startup.option = map.get_string(&K8S_STARTUP_LEASE);
+
+    if let Some(k8s_startup_lease) = map.get_string(&K8S_STARTUP_LEASE) {
+        let startup = result
+            .startup
+            .get_or_insert_with(K8sStartupLeaseConfig::default);
+        startup.option = Some(k8s_startup_lease)
+    }
 
     if let Some(value) = map.get(&LINE_EXCLUSION) {
         let regex_rules = result.log.line_exclusion_regex.get_or_insert(Vec::new());
